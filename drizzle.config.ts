@@ -5,11 +5,6 @@ export default {
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {
-    host: "localhost",
-    port: 5432,
-    user: "postgres",
-    password: "220286431",
-    database: "messenger",
-    ssl: false,
+    url: Bun.env.DATABASE_URL!,
   },
 } satisfies Config;

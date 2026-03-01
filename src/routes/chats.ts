@@ -1,7 +1,7 @@
 import { Elysia, t } from "elysia";
 import { db } from "../db";
 import { chats, chatMembers, messages } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne ,desc} from "drizzle-orm";
 import { authPlugin } from "../middleware/auth";
 
 export const chatRouters = new Elysia({ prefix: "/chats" })
@@ -13,6 +13,31 @@ export const chatRouters = new Elysia({ prefix: "/chats" })
       const { userId, body, set } = ctx;
       const { targetUserId } = body;
 
+      const existingChats = await db
+        .select({ chatId: chatMembers.chatId })
+        .from(chatMembers)
+        .where(eq(chatMembers.userId, userId));
+
+      for (const { chatId } of existingChats) {
+        if(!chatId) continue;
+
+        const members = await db
+          .select()
+          .from(chatMembers)
+          .where(eq(chatMembers.chatId, chatId));
+
+        const isPersonal = members.length === 2;
+        const hasTarget = members.some((m) => m.userId === targetUserId);
+
+        const [chat] = await db
+          .select()
+          .from(chats)
+          .where(and(eq(chats.id, chatId!), eq(chats.isGroup, false)));
+
+        if (isPersonal && hasTarget && chat) {
+          return { message: "Chat already exist ✅", chatId };
+        }
+      }
       const [chat] = await db.insert(chats).values({}).returning();
 
       if (!chat) {
@@ -163,7 +188,7 @@ export const chatRouters = new Elysia({ prefix: "/chats" })
       .update(messages)
       .set({ isRead: true })
       .where(
-        and(eq(messages.chatId, params.chatId), eq(messages.senderId, userId)),
+        and(eq(messages.chatId, params.chatId), ne(messages.senderId, userId)),
       );
     return { message: "Messages marked as read ✅" };
   });

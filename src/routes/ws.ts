@@ -3,7 +3,10 @@ import { db } from "../db";
 import { messages, chatMembers, users } from "../db/schema";
 import { eq, and } from "drizzle-orm";
 import { jwt } from "@elysiajs/jwt";
+
 const connections = new Map<string, any>();
+
+const userCache = new Map<string, string>();
 
 export const wsRouters = new Elysia()
   .use(
@@ -44,18 +47,22 @@ export const wsRouters = new Elysia()
         ws.close();
         return;
       }
-      connections.set(`${chatId}:${userId}`, ws);
+      await db
+        .update(users)
+        .set({ isOnline: true })
+        .where(eq(users.id, userId));
+
+      const connKey = `${chatId}:${userId}`;
+      connections.set(connKey, ws);
+      userCache.set(ws.id, userId);
+
       console.log(`User ${userId} connected to chat ${chatId}`);
     },
     async message(ws, msg: any) {
       const chatId = ws.data.params.chatId;
-      const token = (ws.data.query as any).token;
-      const jwtInstance = (ws.data as any).jwt;
 
-      const payload = await jwtInstance.verify(token);
-      if (!payload) return;
-
-      const userId = payload.userId;
+      const userId = userCache.get(ws.id);
+      if (!userId) return;
 
       const [saved] = await db
         .insert(messages)
@@ -72,20 +79,18 @@ export const wsRouters = new Elysia()
         }
       });
     },
-    close(ws) {
+    async close(ws) {
       const chatId = ws.data.params.chatId;
-      connections.forEach(async (__, key) => {
-        if (key.startsWith(chatId)) {
-          const userId = key.split(":")[1];
-          if (!userId) return;
-          await db
-            .update(users)
-            .set({ isOnline: false })
-            .where(eq(users.id, userId));
 
-          connections.delete(key);
-          console.log(`User ${userId} disconnected`);
-        }
-      });
+      const userId = userCache.get(ws.id);
+      if (userId) {
+        await db
+          .update(users)
+          .set({ isOnline: false })
+          .where(eq(users.id, userId));
+        connections.delete(`${chatId}:${userId}`);
+        userCache.delete(ws.id);
+        console.log(`User ${userId} disconnected`);
+      }
     },
   });

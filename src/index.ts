@@ -9,14 +9,28 @@ import { Elysia } from "elysia";
 import { lt } from "drizzle-orm";
 import { refreshTokens, tokenBlacklist } from "./db/schema";
 import { db } from "./db";
+import { rateLimit } from "elysia-rate-limit";
 
 const app = new Elysia()
   .use(cors())
   .use(
+    rateLimit({
+      duration: 6000,
+      max: 60,
+      errorResponse: new Response(
+        JSON.stringify({ error: "Too many requests ❌" }),
+        {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    }),
+  )
+  .use(
     swagger({
       documentation: {
         info: {
-          title: "Mesenger API",
+          title: "Messenger API",
           version: "1.0.0",
         },
         components: {

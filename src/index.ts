@@ -52,7 +52,7 @@ const app = new Elysia()
   .use(wsRouters)
   .use(uploadRoutes)
   .get("/", () => "Messenger API works! ✅")
-  .listen(3000);
+  .listen(process.env.Port || 3000);
 setInterval(
   async () => {
     await db
